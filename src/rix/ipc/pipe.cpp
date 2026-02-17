@@ -3,18 +3,41 @@
 namespace rix {
 namespace ipc {
 
-/**< TODO */
+// Factory method to create a pair of Pipe objects.
+// The first element is the read-end and the second is the write-end.
 std::array<Pipe, 2> Pipe::create() {
-    return {};
+    int fds[2]; // array to store the pipes
+    if (::pipe(fds) == -1) {
+        // Handle error - return invalid pipes
+        return {Pipe(), Pipe()};
+    }
+    // fds[0] is read end; fds[1] is write-end
+    return {Pipe(fds[0], true), Pipe(fds[1], false)};
 }
 
 Pipe::Pipe() : File(), read_end_(false) {}
 
-/**< TODO */
-Pipe::Pipe(const Pipe &other) {}
+// Copy constructor - duplicates the underlying file descriptopr using `dup`
+Pipe::Pipe(const Pipe &src) : File(), read_end_(src.read_end_) {
+    if (src.fd_ >= 0 ) { // if the file is valid
+            fd_ = ::dup(src.fd_);
+        }
+}
 
-/**< TODO */
-Pipe &Pipe::operator=(const Pipe &other) {
+// Assignment operator - duplicates the underlying file descriptors using `dup`
+Pipe &Pipe::operator=(const Pipe &src) {
+    if (this != &src) { // avoids self-assignment
+        if (fd_ > 0) { // if the file is valid
+            ::close(fd_); // close existing fd
+            fd_ = -1;
+        }
+        if (src.fd_ >= 0) { // if the source file descriptor is valid
+            fd_ = ::dup(src.fd_);
+        } else {
+            fd_ = -1;
+        }
+        read_end_ = src.read_end_; // copy read_end
+    }
     return *this;
 }
 

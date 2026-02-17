@@ -1,2 +1,8 @@
 # Ignore planning file
 IMPLEMENTATION_PLAN.md
+
+# Ignore build directory
+build/
+
+# Ignore all .sh files
+*.sh

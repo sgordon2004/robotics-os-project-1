@@ -69,7 +69,8 @@ inline uint32_t size_message_vector(const std::vector<T> &src) {
 template <typename T>
 inline void serialize_number(uint8_t *dst, size_t &offset, const T &src) {
     static_assert(std::is_arithmetic<T>::value, "T must be an arithmetic type");
-    /**< TODO */
+    std::memcpy(dst + offset, &src, sizeof(T));
+    offset += sizeof(T);
 }
 
 /**
@@ -82,7 +83,14 @@ inline void serialize_number(uint8_t *dst, size_t &offset, const T &src) {
  * @param src The source string to be serialized
  */
 inline void serialize_string(uint8_t *dst, size_t &offset, const std::string &src) {
-    /**< TODO */
+    // Serialize the length as a uint32_t
+    uint32_t len = static_cast<uint32_t>(src.size());
+    std::memcpy(dst + offset, &len, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    // Copy the string data
+    std::memcpy(dst + offset, src.data(), src.size());
+    offset += src.size();
 }
 
 /**
@@ -95,7 +103,7 @@ inline void serialize_string(uint8_t *dst, size_t &offset, const std::string &sr
  * @param src The source message to be serialized
  */
 inline void serialize_message(uint8_t *dst, size_t &offset, const Message &src) {
-    /**< TODO */
+    src.serialize(dst, offset);
 }
 
 /**
@@ -112,7 +120,9 @@ inline void serialize_message(uint8_t *dst, size_t &offset, const Message &src) 
 template <typename T, size_t N>
 inline void serialize_number_array(uint8_t *dst, size_t &offset,
                                    const std::array<T, N> &src) {
-    /**< TODO */
+    static_assert(std::is_arithmetic<T>::value, "T must be an arithmetic type");
+    std::memcpy(dst + offset, src.data(), N * sizeof(T));
+    offset += N * sizeof(T);
 }
 
 /**
@@ -128,7 +138,9 @@ inline void serialize_number_array(uint8_t *dst, size_t &offset,
 template <size_t N>
 inline void serialize_string_array(uint8_t *dst, size_t &offset,
                                    const std::array<std::string, N> &src) {
-    /**< TODO */
+    for (const auto &s : src) {
+        serialize_string(dst, offset, s);
+    }
 }
 
 /**
@@ -146,7 +158,9 @@ template <typename T, size_t N>
 inline void serialize_message_array(uint8_t *dst, size_t &offset,
                                     const std::array<T, N> &src) {
     static_assert(std::is_base_of<Message, T>::value, "T must derive from Message");
-    /**< TODO */
+    for (const auto &m : src) {
+        serialize_message(dst, offset, m);
+    }
 }
 
 /**
@@ -163,7 +177,14 @@ template <typename T>
 inline void serialize_number_vector(uint8_t *dst, size_t &offset,
                                     const std::vector<T> &src) {
     static_assert(std::is_arithmetic<T>::value, "T must be an arithmetic type");
-    /**< TODO */
+    // Serialize the vector size as a uint32_t
+    uint32_t len = static_cast<uint32_t>(src.size());
+    std::memcpy(dst + offset, &len, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    // Copy the vector data
+    std::memcpy(dst + offset, src.data(), src.size() * sizeof(T));
+    offset += src.size() * sizeof(T);
 }
 
 /**
@@ -177,7 +198,15 @@ inline void serialize_number_vector(uint8_t *dst, size_t &offset,
  */
 inline void serialize_string_vector(uint8_t *dst, size_t &offset,
                                     const std::vector<std::string> &src) {
-    /**< TODO */
+    // Serialize the vector size as a uint32_t
+    uint32_t len = static_cast<uint32_t>(src.size());
+    std::memcpy(dst + offset, &len, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    // Serialize each string
+    for (const auto &s : src) {
+        serialize_string(dst, offset, s);
+    }
 }
 
 /**
@@ -195,7 +224,15 @@ template <typename T>
 inline void serialize_message_vector(uint8_t *dst, size_t &offset,
                                      const std::vector<T> &src) {
     static_assert(std::is_base_of<Message, T>::value, "T must derive from Message");
-    /**< TODO */
+    // Serialize the vector size as a uint32_t
+    uint32_t len = static_cast<uint32_t>(src.size());
+    std::memcpy(dst + offset, &len, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    // Serialize each message
+    for (const auto &m : src) {
+        serialize_message(dst, offset, m);
+    }
 }
 
 /**
@@ -214,8 +251,17 @@ inline void serialize_message_vector(uint8_t *dst, size_t &offset,
 template <typename T>
 inline bool deserialize_number(T &dst, const uint8_t *src, size_t size, size_t &offset) {
     static_assert(std::is_arithmetic<T>::value, "T must be an arithmetic type");
-    /**< TODO */
-    return false;
+    // Check if there are enough bytes available
+    if (offset + sizeof(T) > size) {
+        return false;
+    }
+
+    // Copy the bytes from the source buffer into the destination
+    std::memcpy(&dst, src + offset, sizeof(T));
+    offset += sizeof(T);
+
+    return true;
+    
 }
 
 /**
@@ -232,8 +278,22 @@ inline bool deserialize_number(T &dst, const uint8_t *src, size_t size, size_t &
  */
 inline bool deserialize_string(std::string &dst, const uint8_t *src, size_t size,
                                size_t &offset) {
-    /**< TODO */
-    return false;
+    // Deserialize the length
+    uint32_t len;
+    if (!deserialize_number(len, src, size, offset)) {
+        return false;
+    }
+
+    // Check if there are enough bytes for the string data
+    if (offset + len > size) {
+        return false;
+    }
+
+    // Create a string from the bytes
+    dst = std::string(reinterpret_cast<const char*>(src + offset), len);
+    offset += len;
+
+    return true;
 }
 
 /**
@@ -250,8 +310,7 @@ inline bool deserialize_string(std::string &dst, const uint8_t *src, size_t size
  */
 inline bool deserialize_message(Message &dst, const uint8_t *src, size_t size,
                                 size_t &offset) {
-    /**< TODO */
-    return false;
+    return dst.deserialize(src, size, offset);
 }
 
 /**
@@ -272,8 +331,16 @@ template <typename T, size_t N>
 inline bool deserialize_number_array(std::array<T, N> &dst, const uint8_t *src,
                                      size_t size, size_t &offset) {
     static_assert(std::is_arithmetic<T>::value, "T must be an arithmetic type");
-    /**< TODO */
-    return false;
+    // Check if there are enough bytes available
+    if (offset + N * sizeof(T) > size) {
+        return false;
+    }
+
+    // Copy the bytes from the source buffer to the destination array
+    std::memcpy(dst.data(), src + offset, N * sizeof(T));
+    offset += N * sizeof(T);
+
+    return true;
 }
 
 /**
@@ -292,8 +359,12 @@ inline bool deserialize_number_array(std::array<T, N> &dst, const uint8_t *src,
 template <size_t N>
 inline bool deserialize_string_array(std::array<std::string, N> &dst, const uint8_t *src,
                                      size_t size, size_t &offset) {
-    /**< TODO */
-    return false;
+    for (auto &s : dst) {
+        if (!deserialize_string(s, src, size, offset)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /**
@@ -314,8 +385,13 @@ template <typename T, size_t N>
 inline bool deserialize_message_array(std::array<T, N> &dst, const uint8_t *src,
                                       size_t size, size_t &offset) {
     static_assert(std::is_base_of<Message, T>::value, "T must derive from Message");
-    /**< TODO */
-    return false;
+    for (auto &m : dst) {
+        if (!deserialize_message(m, src, size, offset)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**
@@ -335,8 +411,23 @@ template <typename T>
 inline bool deserialize_number_vector(std::vector<T> &dst, const uint8_t *src,
                                       size_t size, size_t &offset) {
     static_assert(std::is_arithmetic<T>::value, "T must be an arithmetic type");
-    /**< TODO */
-    return false;
+    // Deserialize the vector size
+    uint32_t len;
+    if (!deserialize_number(len, src, size, offset)) {
+        return false;
+    }
+
+    // Check if there are enough bytes for the vector data
+    if (offset + len * sizeof(T) > size) {
+        return false;
+    }
+
+    // Resize the vector and copy the data
+    dst.resize(len);
+    std::memcpy(dst.data(), src + offset, len * sizeof(T));
+    offset += len * sizeof(T);
+
+    return true;
 }
 
 /**
@@ -353,8 +444,23 @@ inline bool deserialize_number_vector(std::vector<T> &dst, const uint8_t *src,
  */
 inline bool deserialize_string_vector(std::vector<std::string> &dst, const uint8_t *src,
                                       size_t size, size_t &offset) {
-    /**< TODO */
-    return false;
+    // Deserialize the vector size
+    uint32_t len;
+    if (!deserialize_number(len, src, size, offset)) {
+        return false;
+    }
+
+    // Resize the vector
+    dst.resize(len);
+
+    // Deserialize each string
+    for (auto &s : dst) {
+        if (!deserialize_string(s, src, size, offset)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**
@@ -374,8 +480,23 @@ template <typename T>
 inline bool deserialize_message_vector(std::vector<T> &dst, const uint8_t *src,
                                        size_t size, size_t &offset) {
     static_assert(std::is_base_of<Message, T>::value, "T must derive from Message");
-    /**< TODO */
-    return false;
+    // Deserialize the vector size
+    uint32_t len;
+    if (!deserialize_number(len, src, size, offset)) {
+        return false;
+    }
+
+    // Resize the vector
+    dst.resize(len);
+
+    // Deserialize each message
+    for (auto &m : dst) {
+        if (!deserialize_message(m, src, size, offset)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 }  // namespace detail
 }  // namespace msg
